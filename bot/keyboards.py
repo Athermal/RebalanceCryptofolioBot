@@ -5,8 +5,7 @@ import database.requests as rq
 main = InlineKeyboardMarkup(inline_keyboard=[
     [InlineKeyboardButton(text='Портфель', callback_data='portfolio')],
     [InlineKeyboardButton(text='Стратегия', callback_data='strategy')],
-    [InlineKeyboardButton(text='Активные позиции', callback_data='positions')],
-    [InlineKeyboardButton(text='Настройки', callback_data='settings')]
+    [InlineKeyboardButton(text='Активные позиции', callback_data='positions')]
 ])
 
 portfolio = InlineKeyboardMarkup(inline_keyboard=[
@@ -151,6 +150,16 @@ async def positions(page: int = 0) -> InlineKeyboardMarkup:
 
 async def in_position(position_id: int) -> InlineKeyboardMarkup:
     keyboard = InlineKeyboardBuilder()
+    keyboard.add(
+        InlineKeyboardButton(
+            text="➕ Докупить токен", callback_data=f"position_buy_order_{position_id}"
+        ),
+        InlineKeyboardButton(
+            text="➖ Продать токен", callback_data=f"position_sell_order_{position_id}"
+        ),
+    )
+    keyboard.row(InlineKeyboardButton(text='Назад', callback_data='positions'),
+                 InlineKeyboardButton(text='В меню', callback_data='start'))
     return keyboard.as_markup()
 
 

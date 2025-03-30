@@ -1,6 +1,7 @@
 from decimal import Decimal
 from typing import Optional, Union, Any
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import selectinload, joinedload
+from sqlalchemy.ext.asyncio import AsyncSession
 from database.connection import async_session
 from database.models import Deposit, Direction, Sector, Token, Position, Order
 from sqlalchemy import select, func, desc
@@ -8,7 +9,7 @@ from bot.states import StrategyLiquidity, StrategyWorkingCapital
 
 
 async def add_deposit(amount_usd: Decimal) -> None:
-    amount_usd = amount_usd.quantize(Decimal('0.01'))
+    amount_usd = amount_usd
     async with async_session() as session:
         async with session.begin(): # argument readonly doesn't work in asyncpg
             session.add(Deposit(amount_usd=amount_usd))
@@ -64,25 +65,36 @@ async def add_deposit(amount_usd: Decimal) -> None:
                             raw_token_balance = sector_balance * (token.percentage / Decimal(100))
                             token_balance = raw_token_balance.quantize(Decimal('0.01'))
                             token.balance_usd += token_balance
+                            token.balance_entry_usd = token.balance_usd * Decimal("0.10")
                             total_token_balance += token_balance
                         if sector.tokens:
                             last_token_balance = sector_balance - total_token_balance
                             sector.tokens[-1].balance_usd += last_token_balance
+                            sector.tokens[-1].balance_entry_usd = sector.tokens[
+                                -1
+                            ].balance_usd * Decimal("0.10")
                         else:
                             raise ValueError('В секторе нет токенов')
+
                     if sectors:
                         last_sector_balance = direction_balance - total_sector_balance
                         sectors[-1].balance_usd += last_sector_balance
                         last_sector = sectors[-1]
                         total_last_token_balance = Decimal('0')
                         for j, token in enumerate(last_sector.tokens[:-1]):
-                            raw_token_balance = last_sector_balance * (token.percentage / Decimal(100))
+                            raw_token_balance = last_sector_balance * (
+                                (token.percentage / Decimal(100))
+                                )
                             token_balance = raw_token_balance.quantize(Decimal('0.01'))
                             token.balance_usd += token_balance
+                            token.balance_entry_usd = token.balance_usd * Decimal("0.10")
                             total_last_token_balance += token_balance
                         if last_sector.tokens:
                             last_token_balance = last_sector_balance - total_last_token_balance
                             last_sector.tokens[-1].balance_usd += last_token_balance
+                            last_sector.tokens[-1].balance_entry_usd = (
+                                last_sector.tokens[-1].balance_usd * Decimal("0.10")
+                            )
                         else:
                             raise ValueError('В секторе нет токенов')
                     direction.balance_usd -= direction_balance
@@ -91,9 +103,9 @@ async def add_portfolio_directions() -> None:
     async with async_session() as session:
         async with session.begin():
             liquidity = Direction(name=StrategyLiquidity.direction_name,
-                                  percentage=Decimal(60.00))
+                                  percentage=Decimal('60.00'))
             working_capital = Direction(name=StrategyWorkingCapital.direction_name,
-                                        percentage=Decimal(40.00))
+                                        percentage=Decimal('40.00'))
             session.add_all([liquidity, working_capital])
 
 
@@ -116,11 +128,24 @@ async def change_percentage_portfolio_direction(direction_name: str, percentage:
             existing_record.percentage = percentage
 
 
-async def get_portfolio_direction_info(direction_name: str, field: str) -> Optional[Direction]:
-    async with async_session() as session:
-        query = select(getattr(Direction, field)).where(Direction.name == direction_name)
-        result = await session.execute(query)
-        return result.scalar_one_or_none()
+async def get_direction_or_info(
+        direction_name: str,
+        field: str = None,
+        current_session: AsyncSession = None,
+        ) -> Optional[Union[Direction, Any]]:
+    if field:
+        query = select(getattr(Direction, field)).where(
+            Direction.name == direction_name
+        )
+    else:
+        query = select(Direction).where(Direction.name == direction_name)
+
+    if current_session:
+        result = await current_session.execute(query)
+    else:
+        async with async_session() as session:
+            result = await session.execute(query)
+    return result.scalar_one_or_none()
 
 
 async def add_sector(sector_name: str, percentage: Decimal) -> None:
@@ -167,8 +192,11 @@ async def get_all_sectors() -> Optional[list[Sector]]:
         return sectors
 
 
-async def get_sector_info(sector_id: int = None, sector_name: str = None,
-                          field: str = None) -> Optional[Union[Sector, Any]]:
+async def get_sector_info(
+    sector_id: int = None,
+    sector_name: str = None,
+    field: str = None
+) -> Optional[Union[Sector, Any]]:
     if not (sector_id or sector_name):
         return None
     async with async_session() as session:
@@ -320,24 +348,30 @@ async def change_token_percentage(percentage: Decimal, sector_id: int, token_id:
             token.percentage = percentage
 
 
-async def get_token_info(token_id: int = None, symbol: str = None,
-                         field: str = None) -> Optional[Union[Token, Any]]:
+async def get_token_or_info(
+    token_id: int = None,
+    symbol: str = None,
+    field: str = None,
+    current_session: AsyncSession = None,
+) -> Optional[Union[Token, Any]]:
     if not (token_id or symbol):
         return None
-    async with async_session() as session:
-        if field:
-            query = select(getattr(Token, field))
-        else:
-            query = select(Token).options(
-                selectinload(Token.sector),
-                selectinload(Token.position)
-            )
-        if symbol:
-            query = query.where(Token.symbol == symbol)
-        elif token_id:
-            query = query.where(Token.id == token_id)
-        token = await session.execute(query)
-        return token.scalar_one_or_none()
+    if field:
+        query = select(getattr(Token, field))
+    else:
+        query = select(Token).options(
+            selectinload(Token.sector), selectinload(Token.position)
+        )
+    if token_id:
+        query = query.where(Token.id == token_id)
+    elif symbol:
+        query = query.where(Token.symbol == symbol)
+    if current_session:
+        result = await current_session.execute(query)
+    else:
+        async with async_session() as session:
+            result = await session.execute(query)
+    return result.scalar_one_or_none()
 
 
 async def delete_token(token_id: int = None, symbol: str = None, token: Token = None) -> None:
@@ -376,32 +410,45 @@ async def get_all_sector_tokens(sector_id: int = None,
 
 
 async def buy_order(token_id: int, amount: Decimal, entry_price: Decimal) -> None:
-    amount = amount.quantize(Decimal('0.0000000001'))
-    entry_price = entry_price.quantize(Decimal('0.0000000001'))
+    amount = amount.quantize(Decimal("0.0000000001"))
+    entry_price = entry_price.quantize(Decimal("0.0000000001"))
     async with async_session() as session:
         async with session.begin():
-            query = select(Token).where(Token.id == token_id)
-            result = await session.execute(query)
-            token = result.scalar_one_or_none()
+            token = await get_token_or_info(
+                token_id=token_id, current_session=session
+                )
+            position = token.position if token.position else None
+
+            liquidity = await get_direction_or_info(
+                direction_name="Ликвидность", current_session=session
+                )
 
             invested_usd = amount * entry_price
-            token_symbol = token.symbol
-            token_balance_usd = token.balance_usd
-            if invested_usd > token_balance_usd:
-                text = (f'❌ <b>Ошибка! Ордер не был добавлен.</b>\n\n'
-                        f'Вы превысили максимально возможную сумму для покупки!\n\n'
-                        f'⚖️<b>Для покупки токена "{token_symbol}" '
-                        f'доступно: {token.balance_usd}$</b>')
+            token_balance_entry_usd = token.balance_entry_usd
+            allowed_liquidity_balance = liquidity.balance_usd * Decimal("0.02")
+
+            if position or token_balance_entry_usd < Decimal("5"):
+                allowed_balance = token_balance_entry_usd + allowed_liquidity_balance
+            else:
+                allowed_balance = token_balance_entry_usd
+
+            if invested_usd > allowed_balance:
+                text = (
+                    "❌ <b>Ошибка! Ордер не был добавлен.</b>\n\n"
+                    "Вы превысили максимально возможную сумму $ для покупки!\n\n"
+                )
                 raise ValueError(text)
-            token.balance_usd -= invested_usd
+
+            token_used = min(token_balance_entry_usd, invested_usd)
+            liquidity_used = max(Decimal(0), invested_usd - token_balance_entry_usd)
+            if liquidity_used > 0:
+                liquidity.balance_usd -= liquidity_used
+            token.balance_usd -= token_used
+
             order = Order(token_id=token_id, amount=amount, entry_price=entry_price)
             session.add(order)
             await session.flush()
-            order.name = f'{order.type} #{order.id} — {token.symbol}'
-
-            query = select(Position).where(Position.token_id == token_id)
-            position = await session.execute(query)
-            position = position.scalar_one_or_none()
+            order.name = f"{order.type} #{order.id} — {token.symbol}"
             if position:
                 position.amount += amount
                 position.invested_usd += amount * entry_price
@@ -418,7 +465,7 @@ async def add_position(token_id: int, amount: Decimal, entry_price: Decimal) -> 
         async with session.begin():
             invested_usd = Decimal(amount * entry_price).quantize(Decimal('0.01'))
             bodyfix_price_usd = Decimal(entry_price * 2).quantize(Decimal('0.0000000001'))
-            token = await get_token_info(token_id=token_id)
+            token = await get_token_or_info(token_id=token_id)
             position = Position(name=token.symbol, token_id=token_id,
                                 amount=amount, entry_price=entry_price,
                                 invested_usd=invested_usd, bodyfix_price_usd=bodyfix_price_usd)
@@ -429,7 +476,7 @@ async def sell_order(token_id: int, amount: Decimal) -> None:
     amount = amount.quantize(Decimal('0.0000000001'))
     async with async_session() as session:
         async with session.begin():
-            query = select(Token).where(Token.id == token_id)
+            query = select(Token).options(joinedload(Token.position)).where(Token.id == token_id)
             result = await session.execute(query)
             token = result.scalar_one_or_none()
             if not token.position:
@@ -443,12 +490,14 @@ async def sell_order(token_id: int, amount: Decimal) -> None:
                         f'⚖️<b>Для продажи токена "{token_symbol}" доступно: '
                         f'{position.amount} токенов</b>')
                 raise ValueError(text)
-
             order = Order(token_id=token_id, amount=amount, entry_price=Decimal(0), type='sell')
             session.add(order)
             new_amount = position.amount - amount
             if new_amount == Decimal(0):
                 await session.delete(position)
+            else:
+                position.amount = new_amount
+                position.invested_usd -= amount * position.entry_price
 
 
 async def get_all_positions() -> Optional[list[Position]]:
@@ -475,12 +524,37 @@ async def get_all_usd_info() -> Optional[Decimal]:
 
         all_usd_sum = ((usd_in_positions or Decimal(0)) + (usd_in_tokens or Decimal(0))
                        + (usd_in_liquidity or Decimal(0)))
-        return all_usd_sum
+        return all_usd_sum or Decimal(0.00)
 
 
-async def get_positions_usd_info() -> Optional[Decimal]:
+async def get_positions_usd_info() -> Decimal:
     async with async_session() as session:
         query = select(func.sum(Position.invested_usd))
         result = await session.execute(query)
         usd_in_positions = result.scalar_one_or_none()
-        return usd_in_positions or Decimal(0)
+        return usd_in_positions or Decimal(0.00)
+
+
+async def get_tokens_usd() -> Decimal:
+    async with async_session() as session:
+        query = select(func.sum(Token.balance_usd))
+        result = await session.execute(query)
+        usd_in_tokens = result.scalar_one_or_none()
+        return usd_in_tokens or Decimal(0.00)
+
+
+async def get_position_info(position_id: int = None, name: str = None,
+                         field: str = None) -> Optional[Union[Token, Any]]:
+    if not (position_id or name):
+        return None
+    async with async_session() as session:
+        if field:
+            query = select(getattr(Position, field))
+        else:
+            query = select(Position).options(selectinload(Position.token))
+        if name:
+            query = query.where(Position.name == name)
+        elif position_id:
+            query = query.where(Position.id == position_id)
+        position = await session.execute(query)
+        return position.scalar_one_or_none()

@@ -1,6 +1,6 @@
 from aiogram.fsm.state import StatesGroup, State
 
-class DepositState(StatesGroup):
+class Deposit(StatesGroup):
     amount_usd = State()
 
 class StrategyLiquidity(StatesGroup):
@@ -34,4 +34,4 @@ class Order(StatesGroup):
     sell_token_symbol = State()
     sell_token_id = State()
     sell_amount = State()
-
+    

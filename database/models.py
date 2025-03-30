@@ -16,7 +16,7 @@ class Deposit(Base):
     __tablename__ = 'deposits'
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    amount_usd: Mapped[Decimal] = mapped_column(Numeric(40,2, ), nullable=False)
+    amount_usd: Mapped[Decimal] = mapped_column(Numeric(40,2), nullable=False)
 
 
 class Direction(Base):
@@ -25,7 +25,9 @@ class Direction(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String(150), unique=True, nullable=False)
     percentage: Mapped[Decimal] = mapped_column(Numeric(5,2), nullable=False)
-    balance_usd: Mapped[Decimal] = mapped_column(Numeric(40,2), nullable=True, default=0.0)
+    balance_usd: Mapped[Decimal] = mapped_column(
+        Numeric(40,2), nullable=True, default=0.0
+    )
 
     __table_args__ = (PERCENTAGE_CONSTRAINT,)
 
@@ -36,10 +38,12 @@ class Sector(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String(150), unique=True, nullable=False)
     percentage: Mapped[Decimal] = mapped_column(Numeric(5, 2), nullable=False)
-    balance_usd: Mapped[Decimal] = mapped_column(Numeric(40,2), nullable=True, default=0.0)
-
-    tokens: Mapped[list['Token']] = relationship('Token', back_populates='sector',
-                                                 cascade='all, delete-orphan')
+    balance_usd: Mapped[Decimal] = mapped_column(
+        Numeric(40,2), nullable=True, default=0.0
+    )
+    tokens: Mapped[list['Token']] = relationship(
+        'Token', back_populates='sector', cascade='all, delete-orphan'
+    )
 
     __table_args__ = (PERCENTAGE_CONSTRAINT,)
 
@@ -51,15 +55,23 @@ class Token(Base):
     sector_id: Mapped[int] = mapped_column(ForeignKey('sectors.id'), nullable=False)
     symbol: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)
     percentage: Mapped[Decimal] = mapped_column(Numeric(5, 2), nullable=False)
-    balance_usd: Mapped[Decimal] = mapped_column(Numeric(40,2), nullable=True, default=0.0)
-    balance_entry_usd: Mapped[Decimal] = mapped_column(Numeric(40, 2), nullable=True)
-    current_coinprice_usd: Mapped[Decimal] = mapped_column(Numeric(40, 10), nullable=True)
+    balance_usd: Mapped[Decimal] = mapped_column(
+        Numeric(40,2), nullable=True, default=0.0
+    )
+    balance_entry_usd: Mapped[Decimal] = mapped_column(
+        Numeric(40, 2), nullable=True, default=0.0
+    )
+    current_coinprice_usd: Mapped[Decimal] = mapped_column(
+        Numeric(40,10), nullable=True
+    )
 
     sector: Mapped['Sector'] = relationship('Sector', back_populates='tokens')
-    position: Mapped['Position'] = relationship('Position', back_populates='token',
-                                                cascade='all, delete-orphan')
-    orders: Mapped[list['Order']] = relationship('Order', back_populates='token',
-                                                 cascade='all, delete-orphan')
+    position: Mapped['Position'] = relationship(
+        'Position', back_populates='token', cascade='all, delete-orphan'
+    )
+    orders: Mapped[list['Order']] = relationship(
+        'Order', back_populates='token', cascade='all, delete-orphan'
+    )
 
     __table_args__ = (PERCENTAGE_CONSTRAINT,)
 
@@ -73,8 +85,12 @@ class Position(Base):
     amount: Mapped[Decimal] = mapped_column(Numeric(50,10), nullable=False)
     entry_price: Mapped[Decimal] = mapped_column(Numeric(40,10), nullable=False)
     invested_usd: Mapped[Decimal] = mapped_column(Numeric(40,2), nullable=False)
-    bodyfix_price_usd: Mapped[Decimal] = mapped_column(Numeric(40, 10), nullable=False)
-    total_usd: Mapped[Decimal] = mapped_column(Numeric(40,2), nullable=True, default=0.0)
+    bodyfix_price_usd: Mapped[Decimal] = mapped_column(
+        Numeric(40, 10), nullable=False
+    )
+    total_usd: Mapped[Decimal] = mapped_column(
+        Numeric(40,2), nullable=True, default=0.0
+    )
 
     token: Mapped['Token'] = relationship('Token', back_populates='position')
 
