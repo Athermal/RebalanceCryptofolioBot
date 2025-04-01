@@ -5,7 +5,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from database.connection import async_session
 from database.models import Deposit, Direction, Sector, Token, Position, Order
 from sqlalchemy import select, func, desc
-from bot.states import StrategyLiquidity, StrategyWorkingCapital
 from bot.utils import round_to_2
 
 
@@ -101,6 +100,8 @@ async def add_deposit(amount_usd: Decimal) -> None:
                         sector.tokens[-1].balance_entry_usd = round_to_2(
                             sector.tokens[-1].balance_usd * Decimal("0.10")
                         )
+                        # Вычитаем распределённую сумму из сектора
+                        sector.balance_usd -= (total_token_balance + last_token_balance)
 
                     # Обработка последнего сектора для избежания ошибок округления
                     if sectors:
@@ -128,6 +129,9 @@ async def add_deposit(amount_usd: Decimal) -> None:
                         last_sector.tokens[-1].balance_entry_usd = round_to_2(
                             last_sector.tokens[-1].balance_usd * Decimal("0.10")
                         )
+                        last_sector.balance_usd -= (
+                            total_last_token_balance + last_token_balance
+                        )
                     # Вычитание израсходованный рабочий капитал
                     direction.balance_usd -= direction_balance
 
@@ -135,10 +139,8 @@ async def add_deposit(amount_usd: Decimal) -> None:
 async def add_portfolio_directions() -> None:
     async with async_session() as session:
         async with session.begin():
-            liquidity = Direction(name=StrategyLiquidity.direction_name,
-                                  percentage=Decimal('60.00'))
-            working_capital = Direction(name=StrategyWorkingCapital.direction_name,
-                                        percentage=Decimal('40.00'))
+            liquidity = Direction(name="Ликвидность", percentage=Decimal("60.00"))
+            working_capital = Direction(name="Рабочий капитал", percentage=Decimal("40.00"))
             session.add_all([liquidity, working_capital])
 
 

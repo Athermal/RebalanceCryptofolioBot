@@ -92,11 +92,26 @@ async def strategy_portfolio(callback: CallbackQuery):
     wcapital_percentage = await rq.get_direction_or_info(
         direction_name=st.StrategyWorkingCapital.direction_name,
         field='percentage') or 0
-    text = (f'<b>📊 Портфель</b>\n\n'
-            f'<b>Текущее распределение:</b>\n'
-            f'🔹{st.StrategyLiquidity.direction_name} - {liquidity_percentage}%\n'
-            f'🔹{st.StrategyWorkingCapital.direction_name} - {wcapital_percentage}%\n\n'
-            f'<b>Выберите пункт для изменения распределения портфеля в %:</b>')
+
+    all_percentage = liquidity_percentage + wcapital_percentage
+    available_percentage = Decimal(100) - all_percentage
+    if available_percentage > 0:
+        text = (
+            f"<b>📊 Портфель</b>\n\n"
+            f"<b>Текущее распределение:</b>\n"
+            f"🔹{st.StrategyLiquidity.direction_name} - {liquidity_percentage}%\n"
+            f"🔹{st.StrategyWorkingCapital.direction_name} - {wcapital_percentage}%\n\n"
+            f"❓<u><i>Для установки направлениям доступно еще: {available_percentage}%</i></u>\n\n"
+            f"<b>Выберите пункт для изменения распределения портфеля в %:</b>"
+        )
+    else:
+        text = (
+            f"<b>📊 Портфель</b>\n\n"
+            f"<b>Текущее распределение:</b>\n"
+            f"🔹{st.StrategyLiquidity.direction_name} - {liquidity_percentage}%\n"
+            f"🔹{st.StrategyWorkingCapital.direction_name} - {wcapital_percentage}%\n\n"
+            f"<b>Выберите пункт для изменения распределения портфеля в %:</b>"
+        )
     await callback.message.edit_text(text, reply_markup=kb.strategy_portfolio)
 
 
@@ -191,12 +206,26 @@ async def strategy_sectors(callback: CallbackQuery):
     sectors = await rq.get_all_sectors()
     sector_text=''
     if sectors:
+        all_percentage = Decimal(0)
         for sector in sectors:
             sector_text += f'🔹 {sector.name} - {sector.percentage}%\n'
-    text = (f'<b>📊 Секторы</b>\n\n'
-            f'<b>Текущее распределение по секторам:</b>\n'
-            f'{sector_text}\n'
-            f'<b>Выберите сектор для изменения распределения в %:</b>')
+            all_percentage += sector.percentage
+        available_percentage = Decimal(100) - all_percentage
+    if available_percentage > 0:
+        text = (
+            f"<b>📊 Секторы</b>\n\n"
+            f"<b>Текущее распределение по секторам:</b>\n"
+            f"{sector_text}\n\n"
+            f"❓<u><i>Для установки секторам доступно еще: {available_percentage}%</i></u>\n\n"
+            f"<b>Выберите сектор для изменения распределения в %:</b>"
+        )
+    else:
+        text = (
+            f"<b>📊 Секторы</b>\n\n"
+            f"<b>Текущее распределение по секторам:</b>\n"
+            f"{sector_text}\n"
+            f"<b>Выберите сектор для изменения распределения в %:</b>"
+        )
     await callback.message.edit_text(text, reply_markup=await kb.strategy_sectors())
 
 
@@ -248,15 +277,27 @@ async def sector_page(callback: CallbackQuery):
     sectors = await rq.get_all_sectors()
     sector_text = ''
     if sectors:
+        all_percentage = Decimal(0)
         for sector in sectors:
             sector_text += f'🔹 {sector.name} - {sector.percentage}%\n'
-    text = (f'<b>📊 Секторы</b>\n\n'
-            f'<b>Текущее распределение по секторам:</b>\n'
-            f'{sector_text}\n'
-            f'<b>Выберите сектор для изменения распределения в %:</b>')
-    await callback.message.edit_text(
-        text,
-        reply_markup=await kb.strategy_sectors(page=page))
+            all_percentage += sector.percentage
+        available_percentage = Decimal(100) - all_percentage
+    if available_percentage > 0:
+        text = (
+            f"<b>📊 Секторы</b>\n\n"
+            f"<b>Текущее распределение по секторам:</b>\n"
+            f"{sector_text}\n\n"
+            f"<b>Для установки секторам доступно еще:</b> {available_percentage}%\n\n"
+            f"<b>Выберите сектор для изменения распределения в %:</b>"
+        )
+    else:
+        text = (
+            f"<b>📊 Секторы</b>\n\n"
+            f"<b>Текущее распределение по секторам:</b>\n"
+            f"{sector_text}\n"
+            f"<b>Выберите сектор для изменения распределения в %:</b>"
+        )
+    await callback.message.edit_text(text, reply_markup=await kb.strategy_sectors(page=page))
 
 
 @router.callback_query(F.data.startswith('sector_button_'))
@@ -342,13 +383,24 @@ async def strategy_tokens(callback: CallbackQuery):
     tokens = await rq.get_all_sector_tokens(sector_id=sector_id)
     token_text = ''
     if tokens:
+        all_percentage = Decimal(0)
         for token in tokens:
             token_text += f'🔹 {token.symbol} - {token.percentage}%\n'
-
-    text = (f'<b>📊 Токены сектора "{sector.name}"</b>\n\n'
-            f'<b>Текущее распределение по токенам:</b>\n'
-            f'{token_text}\n'
-            f'<b>Выберите токен для изменения распределения в %:</b>')
+            all_percentage += token.percentage
+        available_percentage = Decimal(100) - all_percentage
+    if available_percentage > 0:
+        text = (
+            f'<b>📊 Токены сектора "{sector.name}"</b>\n\n'
+            f"<b>Текущее распределение по токенам:</b>\n"
+            f"{token_text}\n\n"
+            f"❓<u><i>Для установки токенам доступно еще: {available_percentage}%</i></u>\n\n"
+            f"<b>Выберите токен для изменения распределения в %:</b>"
+        )
+    else:
+        text = (f'<b>📊 Токены сектора "{sector.name}"</b>\n\n'
+                f'<b>Текущее распределение по токенам:</b>\n'
+                f'{token_text}\n'
+                f'<b>Выберите токен для изменения распределения в %:</b>')
     await callback.message.edit_text(
         text,
         reply_markup=await kb.strategy_tokens(sector_id=sector_id, page=0))
@@ -416,15 +468,29 @@ async def token_page(callback: CallbackQuery):
     tokens = await rq.get_all_sector_tokens(sector_id=sector_id)
     token_text = ''
     if tokens:
+        all_percentage = Decimal(0)
         for token in tokens:
             token_text += f'🔹 {token.symbol} - {token.percentage}%\n'
-    text = (f'<b>📊 Токены сектора "{sector.name}"</b>\n\n'
-            f'<b>Текущее распределение по токенам:</b>\n'
-            f'{token_text}\n'
-            f'<b>Выберите токен для изменения распределения в %:</b>')
+            all_percentage += token.percentage
+        available_percentage = Decimal(100) - all_percentage
+    if available_percentage > 0:
+        text = (
+            f'<b>📊 Токены сектора "{sector.name}"</b>\n\n'
+            f"<b>Текущее распределение по токенам:</b>\n"
+            f"{token_text}\n\n"
+            f"❓<u><i>Для установки токенам доступно еще: {available_percentage}%</i></u>\n\n"
+            f"<b>Выберите токен для изменения распределения в %:</b>"
+        )
+    else:
+        text = (
+            f'<b>📊 Токены сектора "{sector.name}"</b>\n\n'
+            f"<b>Текущее распределение по токенам:</b>\n"
+            f"{token_text}\n"
+            f"<b>Выберите токен для изменения распределения в %:</b>"
+        )
     await callback.message.edit_text(
-        text,
-        reply_markup=await kb.strategy_tokens(sector_id=sector_id, page=page))
+        text, reply_markup=await kb.strategy_tokens(sector_id=sector_id, page=page)
+        )
 
 
 @router.callback_query(F.data.startswith('token_button_'))
@@ -638,8 +704,9 @@ async def sell_order_first(message: Message, state: FSMContext):
             reply_markup=kb.order_back)
         await state.clear()
         return
-    text = (f'⚖️Для продажи доступно: <b>{token.position.amount} {token_symbol}</b>\n\n'
-            f'Введите кол-во токенов, которое будете продавать:')
+    text = (f"⚖️Для продажи доступно: "
+            f"<b>{ut.format_number(token.position.amount)} {token_symbol}</b>\n\n"
+            f"Введите кол-во токенов, которое будете продавать:")
     await message.answer(text)
     await state.set_state(st.Order.sell_amount)
 
@@ -722,7 +789,7 @@ async def position_sell_order(callback: CallbackQuery, state: FSMContext):
     await state.set_state(st.Order.sell_amount)
     await state.update_data(sell_token_symbol=token_symbol, sell_token_id=token_id)
     text = (
-        f"⚖️Для продажи доступно: <b>{position.amount} {token_symbol}\n\n"
+        f"⚖️Для продажи доступно: <b>{ut.format_number(position.amount)} {token_symbol}\n\n"
         f"Введите кол-во токенов, которое будете продавать:</b>"
     )
     await callback.message.edit_text(text)
