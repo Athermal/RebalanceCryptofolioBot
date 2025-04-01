@@ -6,13 +6,15 @@ from database.connection import async_session
 from database.models import Deposit, Direction, Sector, Token, Position, Order
 from sqlalchemy import select, func, desc
 from bot.states import StrategyLiquidity, StrategyWorkingCapital
+from bot.utils import round_to_2
 
 
 async def add_deposit(amount_usd: Decimal) -> None:
-    amount_usd = amount_usd
     async with async_session() as session:
-        async with session.begin(): # argument readonly doesn't work in asyncpg
+        async with session.begin():
             session.add(Deposit(amount_usd=amount_usd))
+
+            # Проверка, что направления в сумме дают 100%
             query = select(Direction)
             result = await session.execute(query)
             portfolio_directions = result.scalars().all()
@@ -22,11 +24,13 @@ async def add_deposit(amount_usd: Decimal) -> None:
                 result = await session.execute(query)
                 total_percentage_directions = result.scalar_one_or_none() or Decimal(0)
                 if total_percentage_directions != Decimal(100):
-                    text = (f'❌ <b>Ошибка!</b>\n\nСуммарный % всех направлений в портфеле = '
-                            f'<b>{total_percentage_directions}%</b>'
-                            f', а для добавления депозита должен быть <b>ровно 100%!</b>')
-                    raise ValueError(text)
+                    raise ValueError(
+                        f"❌ <b>Ошибка!</b>\n\nСуммарный % всех направлений в портфеле = "
+                        f"<b>{total_percentage_directions}%</b>"
+                        f", а для добавления депозита должен быть <b>ровно 100%!</b>"
+                    )
 
+            # Проверка, что секторы в сумме дают 100%
             query = select(Sector).options(selectinload(Sector.tokens))
             result = await session.execute(query)
             sectors = result.scalars().all()
@@ -36,68 +40,97 @@ async def add_deposit(amount_usd: Decimal) -> None:
                 result = await session.execute(query)
                 total_percentage_sectors = result.scalar_one_or_none() or Decimal(0)
                 if total_percentage_sectors != Decimal(100):
-                    text = (f'❌ <b>Ошибка!</b>\n\nСуммарный % всех секторов = '
-                            f'<b>{total_percentage_sectors}%</b>'
-                            f', а для добавления депозита должен быть <b>ровно 100%!</b>')
-                    raise ValueError(text)
+                    raise ValueError(
+                        f"❌ <b>Ошибка!</b>\n\nСуммарный % всех секторов = "
+                        f"<b>{total_percentage_sectors}%</b>"
+                        f", а для добавления депозита должен быть <b>ровно 100%!</b>"
+                    )
 
+            # Проверка, что токены в каждом секторе в сумме дают 100%
             for sector in sectors:
-                total_percentage_tokens = sum(token.percentage for token in sector.tokens)
+                total_percentage_tokens = sum(
+                    token.percentage for token in sector.tokens
+                )
                 if total_percentage_tokens != Decimal(100):
-                    text=(f'❌ <b>Ошибка!</b>\n\nСуммарный % токенов '
-                          f'в секторе <b>{sector.name}</b> = '
-                          f'<b>{total_percentage_tokens}%</b>, '
-                          f'а должен быть <b>ровно 100%!</b>')
-                    raise ValueError(text)
-            for direction in portfolio_directions:
-                direction_balance = amount_usd * (direction.percentage / Decimal(100))
-                direction_balance = direction_balance.quantize(Decimal('0.01'))
+                    raise ValueError(
+                        f"❌ <b>Ошибка!</b>\n\nСуммарный % токенов "
+                        f"в секторе <b>{sector.name}</b> = "
+                        f"<b>{total_percentage_tokens}%</b>, "
+                        f"а должен быть <b>ровно 100%!</b>"
+                    )
+
+            # Распределение средств по направлениям
+            total_direction_balance = Decimal("0")
+            for idx, direction in enumerate(portfolio_directions):
+                # Последнее направление получает остаток для избежания ошибок округления
+                if idx == len(portfolio_directions) - 1:
+                    direction_balance = amount_usd - total_direction_balance
+                else:
+                    direction_balance = round_to_2(
+                        amount_usd * (direction.percentage / Decimal(100))
+                    )
                 direction.balance_usd += direction_balance
+                total_direction_balance += direction_balance
+
+                # Распределение внутри рабочего капитала
                 if direction.name == "Рабочий капитал":
-                    total_sector_balance = Decimal('0')
+                    # Распределение по секторам
+                    total_sector_balance = Decimal("0")
                     for i, sector in enumerate(sectors[:-1]):
-                        raw_sector_balance = direction_balance * (sector.percentage / Decimal(100))
-                        sector_balance = raw_sector_balance.quantize(Decimal('0.01'))
+                        sector_balance = round_to_2(
+                            direction_balance * (sector.percentage / Decimal(100))
+                        )
                         sector.balance_usd += sector_balance
                         total_sector_balance += sector_balance
-                        total_token_balance = Decimal('0')
-                        for j, token in enumerate(sector.tokens[:-1]):
-                            raw_token_balance = sector_balance * (token.percentage / Decimal(100))
-                            token_balance = raw_token_balance.quantize(Decimal('0.01'))
-                            token.balance_usd += token_balance
-                            token.balance_entry_usd = token.balance_usd * Decimal("0.10")
-                            total_token_balance += token_balance
-                        if sector.tokens:
-                            last_token_balance = sector_balance - total_token_balance
-                            sector.tokens[-1].balance_usd += last_token_balance
-                            sector.tokens[-1].balance_entry_usd = sector.tokens[
-                                -1
-                            ].balance_usd * Decimal("0.10")
-                        else:
-                            raise ValueError('В секторе нет токенов')
 
-                    if sectors:
-                        last_sector_balance = direction_balance - total_sector_balance
-                        sectors[-1].balance_usd += last_sector_balance
-                        last_sector = sectors[-1]
-                        total_last_token_balance = Decimal('0')
-                        for j, token in enumerate(last_sector.tokens[:-1]):
-                            raw_token_balance = last_sector_balance * (
-                                (token.percentage / Decimal(100))
-                                )
-                            token_balance = raw_token_balance.quantize(Decimal('0.01'))
-                            token.balance_usd += token_balance
-                            token.balance_entry_usd = token.balance_usd * Decimal("0.10")
-                            total_last_token_balance += token_balance
-                        if last_sector.tokens:
-                            last_token_balance = last_sector_balance - total_last_token_balance
-                            last_sector.tokens[-1].balance_usd += last_token_balance
-                            last_sector.tokens[-1].balance_entry_usd = (
-                                last_sector.tokens[-1].balance_usd * Decimal("0.10")
+                        # Распределение по всем токенам кроме последнего
+                        total_token_balance = Decimal("0")
+                        for j, token in enumerate(sector.tokens[:-1]):
+                            token_balance = round_to_2(
+                                sector_balance * (token.percentage / Decimal(100))
                             )
-                        else:
-                            raise ValueError('В секторе нет токенов')
+                            token.balance_usd += token_balance
+                            token.balance_entry_usd = round_to_2(
+                                token.balance_usd * Decimal("0.10")
+                            )
+                            total_token_balance += token_balance
+
+                        # Последний токен получает остаток для избежания ошибок округления
+                        last_token_balance = sector_balance - total_token_balance
+                        sector.tokens[-1].balance_usd += last_token_balance
+                        sector.tokens[-1].balance_entry_usd = round_to_2(
+                            sector.tokens[-1].balance_usd * Decimal("0.10")
+                        )
+
+                    # Обработка последнего сектора для избежания ошибок округления
+                    if sectors:
+                        last_sector = sectors[-1]
+                        last_sector_balance = direction_balance - total_sector_balance
+                        last_sector.balance_usd += last_sector_balance
+
+                        # Распределение по всем токенам кроме последнего
+                        total_last_token_balance = Decimal("0")
+                        for j, token in enumerate(last_sector.tokens[:-1]):
+                            token_balance = round_to_2(
+                                last_sector_balance * (token.percentage / Decimal(100))
+                            )
+                            token.balance_usd += token_balance
+                            token.balance_entry_usd = round_to_2(
+                                token.balance_usd * Decimal("0.10")
+                            )
+                            total_last_token_balance += token_balance
+
+                        # Последний токен получает остаток для избежания ошибок округления
+                        last_token_balance = (
+                            last_sector_balance - total_last_token_balance
+                        )
+                        last_sector.tokens[-1].balance_usd += last_token_balance
+                        last_sector.tokens[-1].balance_entry_usd = round_to_2(
+                            last_sector.tokens[-1].balance_usd * Decimal("0.10")
+                        )
+                    # Вычитание израсходованный рабочий капитал
                     direction.balance_usd -= direction_balance
+
 
 async def add_portfolio_directions() -> None:
     async with async_session() as session:
@@ -110,7 +143,6 @@ async def add_portfolio_directions() -> None:
 
 
 async def change_percentage_portfolio_direction(direction_name: str, percentage: Decimal) -> None:
-    percentage = percentage.quantize(Decimal('0.01'))
     async with async_session() as session:
         async with session.begin():
             query = select(func.sum(Direction.percentage)).where(Direction.name != direction_name)
@@ -149,7 +181,6 @@ async def get_direction_or_info(
 
 
 async def add_sector(sector_name: str, percentage: Decimal) -> None:
-    percentage = percentage.quantize(Decimal('0.01'))
     async with async_session() as session:
         async with session.begin():
             query = select(func.sum(Sector.percentage)).where(Sector.name != sector_name)
@@ -237,7 +268,6 @@ async def change_sector_percentage(percentage: Decimal,
                                    sector_id: int = None, sector_name: str = None) -> None:
     if not (sector_id or sector_name):
         return None
-    percentage = percentage.quantize(Decimal('0.01'))
     async with async_session() as session:
         async with session.begin():
             query = select(Sector)
@@ -272,7 +302,6 @@ async def change_sector_percentage(percentage: Decimal,
 
 
 async def add_token(sector_id: int, symbol: str, percentage: Decimal) -> None:
-    percentage = percentage.quantize(Decimal('0.01'))
     async with async_session() as session:
         async with session.begin():
             query = select(func.sum(Token.percentage)).where(Token.symbol != symbol,
@@ -312,7 +341,6 @@ async def add_token(sector_id: int, symbol: str, percentage: Decimal) -> None:
 
 async def change_token_percentage(percentage: Decimal, sector_id: int, token_id: int = None,
                                   symbol: str = None) -> None:
-    percentage = percentage.quantize(Decimal('0.01'))
     if not (token_id or symbol):
         return None
     async with async_session() as session:
@@ -410,8 +438,6 @@ async def get_all_sector_tokens(sector_id: int = None,
 
 
 async def buy_order(token_id: int, amount: Decimal, entry_price: Decimal) -> None:
-    amount = amount.quantize(Decimal("0.0000000001"))
-    entry_price = entry_price.quantize(Decimal("0.0000000001"))
     async with async_session() as session:
         async with session.begin():
             token = await get_token_or_info(
@@ -459,12 +485,10 @@ async def buy_order(token_id: int, amount: Decimal, entry_price: Decimal) -> Non
 
 
 async def add_position(token_id: int, amount: Decimal, entry_price: Decimal) -> None:
-    amount = amount.quantize(Decimal('0.0000000001'))
-    entry_price = entry_price.quantize(Decimal('0.0000000001'))
     async with async_session() as session:
         async with session.begin():
-            invested_usd = Decimal(amount * entry_price).quantize(Decimal('0.01'))
-            bodyfix_price_usd = Decimal(entry_price * 2).quantize(Decimal('0.0000000001'))
+            invested_usd = round_to_2(Decimal(amount * entry_price))
+            bodyfix_price_usd = Decimal(entry_price * 2)
             token = await get_token_or_info(token_id=token_id)
             position = Position(name=token.symbol, token_id=token_id,
                                 amount=amount, entry_price=entry_price,
@@ -473,7 +497,6 @@ async def add_position(token_id: int, amount: Decimal, entry_price: Decimal) -> 
 
 
 async def sell_order(token_id: int, amount: Decimal) -> None:
-    amount = amount.quantize(Decimal('0.0000000001'))
     async with async_session() as session:
         async with session.begin():
             query = select(Token).options(joinedload(Token.position)).where(Token.id == token_id)

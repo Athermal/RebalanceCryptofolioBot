@@ -6,22 +6,9 @@ from aiogram.types import Message, CallbackQuery
 import bot.keyboards as kb
 import database.requests as rq
 import bot.states as st
+import bot.utils as ut
 
 router = Router()
-
-def format_number(value: Decimal) -> Decimal:
-    value_str = format(value, 'f')
-    if '.' in value_str:
-        int_part, frac_part = value_str.split('.', 1)
-        frac_part = frac_part.rstrip('0')
-        if frac_part:
-            formatted_str = f'{int_part}.{frac_part}'
-        else:
-            formatted_str = int_part
-    else:
-        formatted_str = value_str
-    return Decimal(formatted_str)
-
 
 @router.message(CommandStart())
 async def cmd_start(message: Message, state: FSMContext):
@@ -72,7 +59,7 @@ async def deposit_first(message: Message, state: FSMContext):
             text = '❌ <b>Ошибка!</b>\n\nСумма должна быть больше нуля!'
             await message.answer(text)
         else:
-            formatted_raw = format_number(raw_input).quantize(
+            formatted_raw = raw_input.quantize(
                 Decimal('0.01'), rounding=ROUND_DOWN
             )
             await state.update_data(amount_usd=formatted_raw)
@@ -124,7 +111,9 @@ async def strategy_liquidity(callback: CallbackQuery, state: FSMContext):
 @router.message(st.StrategyLiquidity.percentage)
 async def strategy_liquidity_first(message: Message, state: FSMContext):
     try:
-        raw_input = Decimal(message.text.replace('%', '').strip())
+        raw_input = ut.round_to_2(
+            Decimal(message.text.replace('%', '').strip())
+            )
         if raw_input == 100:
             text = ('❌ <b>Ошибка!</b>\n\n'
                     'Ликвидность <u>не может быть равна 100%</u>, тебе еще позиции набирать! 😉')
@@ -135,7 +124,7 @@ async def strategy_liquidity_first(message: Message, state: FSMContext):
             await message.answer(text)
             return
         else:
-                await state.update_data(percentage=format_number(raw_input))
+                await state.update_data(percentage=raw_input)
 
         data = await state.get_data()
         await rq.change_percentage_portfolio_direction(
@@ -165,7 +154,9 @@ async def strategy_wcapital(callback: CallbackQuery, state: FSMContext):
 @router.message(st.StrategyWorkingCapital.percentage)
 async def strategy_wcapital_first(message: Message, state: FSMContext):
     try:
-        raw_input = Decimal(message.text.replace('%', '').strip())
+        raw_input = ut.round_to_2(
+            Decimal(message.text.replace('%', '').strip())
+        )
         if raw_input == 100:
             text = ('❌ <b>Ошибка!</b>\n\nРабочий Капитал <u>не может быть равен 100%</u>, '
                     'тебе еще просадки откупать! 😉')
@@ -176,7 +167,7 @@ async def strategy_wcapital_first(message: Message, state: FSMContext):
             await message.answer(text)
             return
         else:
-            await state.update_data(percentage=format_number(raw_input))
+            await state.update_data(percentage=raw_input)
 
         data = await state.get_data()
         await rq.change_percentage_portfolio_direction(
@@ -227,12 +218,14 @@ async def add_sector_first(message: Message, state: FSMContext):
 @router.message(st.Sector.percentage)
 async def add_sector_second(message: Message, state: FSMContext):
     try:
-        raw_input = Decimal(message.text.replace('%', '').strip())
+        raw_input = ut.round_to_2(
+            Decimal(message.text.replace('%', '').strip())
+        )
         if raw_input > 100:
             await message.answer('⚠️ <b>Ошибка!</b>\n\nСектор <u>не может быть более 100%</u>.')
             return
         else:
-            await state.update_data(percentage=format_number(raw_input))
+            await state.update_data(percentage=raw_input)
 
         data = await state.get_data()
         await rq.add_sector(sector_name=data['sector'], percentage=data['percentage'])
@@ -317,12 +310,14 @@ async def sector_change_percentage(callback: CallbackQuery, state: FSMContext):
 @router.message(st.Sector.new_percentage)
 async def sector_change_percentage_second(message: Message, state: FSMContext):
     try:
-        raw_input = Decimal(message.text.replace('%', '').strip())
+        raw_input = ut.round_to_2(
+            Decimal(message.text.replace('%', '').strip())
+        )
         if raw_input > 100:
             await message.answer('⚠️ <b>Ошибка!</b>\n\nСектор <u>не может быть более 100%</u>.')
             return
         else:
-            await state.update_data(percentage=format_number(raw_input))
+            await state.update_data(percentage=raw_input)
 
         data = await state.get_data()
         await rq.change_sector_percentage(sector_name=data['name'], percentage=data['percentage'])
@@ -381,12 +376,14 @@ async def add_token_first(message: Message, state: FSMContext):
 @router.message(st.Token.percentage)
 async def add_token_second(message: Message, state: FSMContext):
     try:
-        raw_input = Decimal(message.text.replace('%', '').strip())
+        raw_input = ut.round_to_2(
+            Decimal(message.text.replace('%', '').strip())
+        )
         if raw_input > 100:
             await message.answer('⚠️ <b>Ошибка!</b>\n\nТокен <u>не может быть более 100%</u>.')
             return
         else:
-            await state.update_data(percentage=format_number(raw_input))
+            await state.update_data(percentage=raw_input)
 
         data = await state.get_data()
         await rq.add_token(
@@ -462,12 +459,14 @@ async def token_change_percentage_first(callback: CallbackQuery, state: FSMConte
 @router.message(st.Token.new_percentage)
 async def token_change_percentage_second(message: Message, state: FSMContext):
     try:
-        raw_input = Decimal(message.text.replace('%', '').strip())
+        raw_input = ut.round_to_2(
+            Decimal(message.text.replace('%', '').strip())
+        )
         if raw_input > 100:
             await message.answer('⚠️ <b>Ошибка!</b>\n\nТокен <u>не может быть более 100%</u>.')
             return
         else:
-            await state.update_data(new_percentage=format_number(raw_input))
+            await state.update_data(new_percentage=raw_input)
         data = await state.get_data()
         sector = await rq.get_sector_info(sector_id=data['sector_id'])
         await rq.change_token_percentage(token_id=data['token_id'], sector_id=data['sector_id'],
@@ -550,9 +549,9 @@ async def buy_order_first(message: Message, state: FSMContext):
             total_usd = token_balance_entry_usd + liquidity_balance
             text = (
                 f'⚖️ <b>Для покупки токена "{token_symbol}" доступно:\n\n'
-                f"Из баланса токена:</b> {format_number(token_balance_entry_usd)}$\n"
-                f"<b>Из ликвидности:</b> {format_number(liquidity_balance)}$\n\n"
-                f"📊 <b>Суммарно доступен вход до:</b> {format_number(total_usd)}$\n\n"
+                f"Из баланса токена:</b> {ut.format_number(token_balance_entry_usd)}$\n"
+                f"<b>Из ликвидности:</b> {ut.format_number(liquidity_balance)}$\n\n"
+                f"📊 <b>Суммарно доступен вход до:</b> {ut.format_number(total_usd)}$\n\n"
                 f"❓<i>Приобретите токены в пределах <b>этой суммы</b> и выведите их на кошелек."
                 f"</i>\n\n"
                 f"<b>Введите итоговое кол-во токенов на кошельке:</b>"
@@ -560,7 +559,7 @@ async def buy_order_first(message: Message, state: FSMContext):
         else:
             text = (
                 f'⚖️ <b>Для покупки токена "{token_symbol}" доступно:</b>\n\n'
-                f"Из баланса токена:<b> {format_number(token_balance_entry_usd)}$</b>\n\n"
+                f"Из баланса токена:<b> {ut.format_number(token_balance_entry_usd)}$</b>\n\n"
                 f"❓ <i>Приобретите токены <b>на эту сумму</b> и выведите их на кошелек.</i>\n\n"
                 f"<b>Введите итоговое кол-во токенов на кошельке:</b>"
             )
@@ -600,7 +599,7 @@ async def buy_order_third(message: Message, state: FSMContext):
         await rq.buy_order(token_id=data['buy_token_id'], amount=data['buy_amount'],
                            entry_price=data['buy_entry_price'])
         await state.clear()
-        text = '✅ <b>Готово!</b>\n\nОрдер был успешно сохранен.'
+        text = ('✅ <b>Готово!</b>\n\nОрдер был успешно сохранен.')
         await message.answer(text,
                              reply_markup=kb.order_back)
     except InvalidOperation:
@@ -670,12 +669,12 @@ async def token_button(callback: CallbackQuery):
     if position:
         text = (
             f'<b>📊 Позиция по токену "{position.name}"</b>\n\n'
-            f'💰 <b>Общая сумма инвестиций:</b> {format_number(position.invested_usd)}$\n\n'
-            f'<b>Количество токенов:</b> {format_number(position.amount)}\n\n'
+            f'💰 <b>Общая сумма инвестиций:</b> {ut.format_number(position.invested_usd)}$\n\n'
+            f'<b>Количество токенов:</b> {ut.format_number(position.amount)}\n\n'
             f'<b>Текущая цена токена:</b> {position.token.current_coinprice_usd or 0}$\n\n'
-            f'<b>Цена входа:</b> {format_number(position.entry_price)}$\n'
-            f'<b>Цена фиксации тела (х2):</b> {format_number(position.bodyfix_price_usd)}$\n\n'
-            f'📈 <b>Текущая стоимость позиции:</b> {format_number(position.total_usd)}$'
+            f'<b>Цена входа:</b> {ut.format_number(position.entry_price)}$\n'
+            f'<b>Цена фиксации тела (х2):</b> {ut.format_number(position.bodyfix_price_usd)}$\n\n'
+            f'📈 <b>Текущая стоимость позиции:</b> {ut.format_number(position.total_usd)}$'
         )
         await callback.message.edit_text(text, reply_markup=await kb.in_position(position_id))
 
@@ -697,9 +696,9 @@ async def position_buy_order(callback: CallbackQuery, state: FSMContext):
         total_usd = token_balance_entry_usd + liquidity_balance
         text = (
             f'⚖️ <b>Для покупки токена "{token_symbol}" доступно:\n\n'
-            f"Из баланса токена:</b> {format_number(token_balance_entry_usd)}$\n"
-            f"<b>Из ликвидности:</b> {format_number(liquidity_balance)}$\n\n"
-            f"📊 <b>Суммарно доступен вход до:</b> {format_number(total_usd)}$\n\n"
+            f"Из баланса токена:</b> {ut.format_number(token_balance_entry_usd)}$\n"
+            f"<b>Из ликвидности:</b> {ut.format_number(liquidity_balance)}$\n\n"
+            f"📊 <b>Суммарно доступен вход до:</b> {ut.format_number(total_usd)}$\n\n"
             f"❓<i>Приобретите токены в пределах <b>этой суммы</b> и выведите их на кошелек."
             f"</i>\n\n"
             f"<b>Введите итоговое кол-во токенов на кошельке:</b>"
@@ -707,7 +706,7 @@ async def position_buy_order(callback: CallbackQuery, state: FSMContext):
     else:
         text = (
             f'⚖️ <b>Для покупки токена "{token_symbol}" доступно:</b>\n\n'
-            f"Из баланса токена:<b> {format_number(token_balance_entry_usd)}$</b>\n\n"
+            f"Из баланса токена:<b> {ut.format_number(token_balance_entry_usd)}$</b>\n\n"
             f"❓ <i>Приобретите токены <b>на эту сумму</b> и выведите их на кошелек.</i>\n\n"
             f"<b>Введите итоговое кол-во токенов на кошельке:</b>"
         )
