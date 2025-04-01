@@ -151,7 +151,7 @@ async def change_percentage_portfolio_direction(direction_name: str, percentage:
             if not_inclusive_percentage + percentage > Decimal(100):
                 text = (f'❌ <b>Ошибка!</b>\n\n'
                         f'Общая сумма процентов <u>не может превышать 100%</u>\n\n'
-                        f'❗️ <b>Обнулите % другого направления и попробуйте снова</b>')
+                        f'❗️ <b>Обнулите % любого направления и попробуйте снова</b>')
                 raise ValueError(text)
 
             query = select(Direction).where(Direction.name == direction_name)
@@ -290,8 +290,8 @@ async def change_sector_percentage(percentage: Decimal,
                 if residue == Decimal(0):
                     text = (f'❌ <b>Ошибка!</b>\n\n'
                             f'Общая сумма процентов <u>не может превышать 100%</u>\n\n'
-                            f'Для установки новому сектору доступно: {residue}%\n\n'
-                            f'❗️ <b>Удалите некоторые секторы, или измените их %</b>')
+                            f'Для установки новому сектору доступно: 0%\n\n'
+                            f'❗️ <b>Удалите некоторые секторы, или обнулите их %</b>')
                     raise ValueError(text)
                 else:
                     text = (f'❌ <b>Ошибка!</b>\n\n'
@@ -317,7 +317,7 @@ async def add_token(sector_id: int, symbol: str, percentage: Decimal) -> None:
                     text = (f'❌ <b>Ошибка!</b>\n\n'
                             f'Общая сумма процентов <u>не может превышать 100%</u>\n\n'
                             f'Для установки новому токену доступно: 0%\n\n'
-                            f'❗️ <b>Удалите некоторые токены, или измените их %</b>')
+                            f'❗️ <b>Удалите некоторые токены, или обнулите их %</b>')
                     raise ValueError(text)
                 else:
                     text = (f'❌ <b>Ошибка!</b>\n\n'
@@ -475,9 +475,10 @@ async def buy_order(token_id: int, amount: Decimal, entry_price: Decimal) -> Non
             session.add(order)
             await session.flush()
             order.name = f"{order.type} #{order.id} — {token.symbol}"
+
             if position:
                 position.amount += amount
-                position.invested_usd += amount * entry_price
+                position.invested_usd += invested_usd
                 position.entry_price = position.invested_usd / position.amount
                 position.bodyfix_price_usd = position.entry_price * Decimal(2)
             else:
@@ -487,7 +488,7 @@ async def buy_order(token_id: int, amount: Decimal, entry_price: Decimal) -> Non
 async def add_position(token_id: int, amount: Decimal, entry_price: Decimal) -> None:
     async with async_session() as session:
         async with session.begin():
-            invested_usd = round_to_2(Decimal(amount * entry_price))
+            invested_usd = Decimal(amount * entry_price)
             bodyfix_price_usd = Decimal(entry_price * 2)
             token = await get_token_or_info(token_id=token_id)
             position = Position(name=token.symbol, token_id=token_id,
