@@ -16,17 +16,17 @@ class Deposit(Base):
     __tablename__ = 'deposits'
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    amount_usd: Mapped[Decimal] = mapped_column(Numeric(40,2), nullable=False)
+    amount_usd: Mapped[Decimal] = mapped_column(Numeric(20, 2), nullable=False)
 
 
 class Direction(Base):
     __tablename__ = 'directions'
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    name: Mapped[str] = mapped_column(String(150), unique=True, nullable=False)
+    name: Mapped[str] = mapped_column(String(20), unique=True, nullable=False)
     percentage: Mapped[Decimal] = mapped_column(Numeric(5,2), nullable=False)
     balance_usd: Mapped[Decimal] = mapped_column(
-        Numeric(40,2), nullable=True, default=0.0
+        Numeric(20, 2), nullable=True, default=0.0
     )
 
     __table_args__ = (PERCENTAGE_CONSTRAINT,)
@@ -36,10 +36,10 @@ class Sector(Base):
     __tablename__ = 'sectors'
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    name: Mapped[str] = mapped_column(String(150), unique=True, nullable=False)
+    name: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)
     percentage: Mapped[Decimal] = mapped_column(Numeric(5, 2), nullable=False)
     balance_usd: Mapped[Decimal] = mapped_column(
-        Numeric(40,2), nullable=True, default=0.0
+        Numeric(20, 2), nullable=True, default=0.0
     )
     tokens: Mapped[list['Token']] = relationship(
         'Token', back_populates='sector', cascade='all, delete-orphan'
@@ -56,13 +56,13 @@ class Token(Base):
     symbol: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)
     percentage: Mapped[Decimal] = mapped_column(Numeric(5, 2), nullable=False)
     balance_usd: Mapped[Decimal] = mapped_column(
-        Numeric(40,2), nullable=True, default=0.0
+        Numeric(20, 2), nullable=True, default=0.0
     )
     balance_entry_usd: Mapped[Decimal] = mapped_column(
-        Numeric(40, 2), nullable=True, default=0.0
+        Numeric(20, 2), nullable=True, default=0.0
     )
     current_coinprice_usd: Mapped[Decimal] = mapped_column(
-        Numeric(40,10), nullable=True
+        Numeric(60,30), nullable=True
     )
 
     sector: Mapped['Sector'] = relationship('Sector', back_populates='tokens')
@@ -82,15 +82,11 @@ class Position(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)
     token_id: Mapped[int] = mapped_column(ForeignKey('tokens.id'), unique=True, nullable=False)
-    amount: Mapped[Decimal] = mapped_column(Numeric(50,10), nullable=False)
-    entry_price: Mapped[Decimal] = mapped_column(Numeric(40,10), nullable=False)
-    invested_usd: Mapped[Decimal] = mapped_column(Numeric(40,2), nullable=False)
-    bodyfix_price_usd: Mapped[Decimal] = mapped_column(
-        Numeric(40, 10), nullable=False
-    )
-    total_usd: Mapped[Decimal] = mapped_column(
-        Numeric(40,2), nullable=True, default=0.0
-    )
+    amount: Mapped[Decimal] = mapped_column(Numeric(60, 30), nullable=False)
+    entry_price: Mapped[Decimal] = mapped_column(Numeric(60, 30), nullable=False)
+    invested_usd: Mapped[Decimal] = mapped_column(Numeric(20, 2), nullable=False)
+    bodyfix_price_usd: Mapped[Decimal] = mapped_column(Numeric(60, 30), nullable=False)
+    total_usd: Mapped[Decimal] = mapped_column(Numeric(20, 2), nullable=True, default=0.0)
 
     token: Mapped['Token'] = relationship('Token', back_populates='position')
 
@@ -100,8 +96,8 @@ class Order(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     token_id: Mapped[int] = mapped_column(ForeignKey('tokens.id'), nullable=False)
-    amount: Mapped[Decimal] = mapped_column(Numeric(50,10), nullable=False)
-    entry_price: Mapped[Decimal] = mapped_column(Numeric(40, 10), nullable=False)
+    amount: Mapped[Decimal] = mapped_column(Numeric(60, 30), nullable=False)
+    entry_price: Mapped[Decimal] = mapped_column(Numeric(60, 30), nullable=False)
     type: Mapped[str] = mapped_column(String(4), default='Buy')
     added_at: Mapped[str] = mapped_column(TIMESTAMP, default=func.current_timestamp())
 
