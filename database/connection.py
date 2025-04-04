@@ -1,8 +1,10 @@
 import os
 from dotenv import load_dotenv
 from decimal import Decimal
+
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.sql import text
+
 from database.models import Base
 import database.requests as rq
 

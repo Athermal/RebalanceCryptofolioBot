@@ -1,5 +1,6 @@
-from sqlalchemy import Numeric, String, TIMESTAMP, ForeignKey, CheckConstraint
 from decimal import Decimal
+
+from sqlalchemy import Numeric, String, TIMESTAMP, ForeignKey, CheckConstraint
 from sqlalchemy import func
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from sqlalchemy.ext.asyncio import AsyncAttrs

@@ -1,12 +1,14 @@
 from decimal import Decimal
 from typing import Optional, Union, Any
+
 from sqlalchemy.orm import selectinload, joinedload
 from sqlalchemy.ext.asyncio import AsyncSession
-from database.connection import async_session
-from database.models import Deposit, Direction, Sector, Token, Position, Order
 from sqlalchemy import select, func, desc
-from bot.utils import round_to_2
 
+from database.models import Deposit, Direction, Sector, Token, Position, Order
+from database.connection import async_session
+from utils.helpers import round_to_2
+from utils.common import symbols_list
 
 async def add_deposit(amount_usd: Decimal) -> None:
     async with async_session() as session:
@@ -493,9 +495,17 @@ async def add_position(token_id: int, amount: Decimal, entry_price: Decimal) -> 
             invested_usd = Decimal(amount * entry_price)
             bodyfix_price_usd = Decimal(entry_price * 2)
             token = await get_token_or_info(token_id=token_id)
-            position = Position(name=token.symbol, token_id=token_id,
-                                amount=amount, entry_price=entry_price,
-                                invested_usd=invested_usd, bodyfix_price_usd=bodyfix_price_usd)
+            token_symbol = token.symbol
+            position = Position(
+                name=token_symbol,
+                token_id=token_id,
+                amount=amount,
+                entry_price=entry_price,
+                invested_usd=invested_usd,
+                bodyfix_price_usd=bodyfix_price_usd,
+            )
+            if token_symbol not in symbols_list:
+                symbols_list.append(token_symbol)
             session.add(position)
 
 
@@ -521,6 +531,8 @@ async def sell_order(token_id: int, amount: Decimal) -> None:
             new_amount = position.amount - amount
             if new_amount == Decimal(0):
                 await session.delete(position)
+                if token_symbol in symbols_list:
+                    symbols_list.remove(token_symbol)
             else:
                 position.amount = new_amount
                 position.invested_usd -= amount * position.entry_price
@@ -528,7 +540,7 @@ async def sell_order(token_id: int, amount: Decimal) -> None:
 
 async def get_all_positions() -> Optional[list[Position]]:
     async with async_session() as session:
-        query = select(Position).order_by(desc(Position.id))
+        query = select(Position).options(joinedload(Position.token)).order_by(desc(Position.id))
         positions = await session.execute(query)
         positions = positions.scalars().all()
         return positions or None

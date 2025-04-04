@@ -1,5 +1,6 @@
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.utils.keyboard import InlineKeyboardBuilder
+
 import database.requests as rq
 
 main = InlineKeyboardMarkup(inline_keyboard=[

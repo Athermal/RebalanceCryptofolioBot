@@ -1,8 +1,9 @@
 import os
+from typing import Callable, Dict, Any, Awaitable
 from dotenv import load_dotenv
+
 from aiogram import BaseMiddleware, Dispatcher
 from aiogram.types import TelegramObject
-from typing import Callable, Dict, Any, Awaitable
 
 load_dotenv()
 class CheckAdminMiddleware(BaseMiddleware): #outer type
