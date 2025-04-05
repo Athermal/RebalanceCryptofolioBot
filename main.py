@@ -24,13 +24,16 @@ async def main():
         await dp.start_polling(bot)
     finally:
         await bybit_parser.stop() 
-        await parser_task
+        try:
+            await parser_task
+        except asyncio.CancelledError:
+            pass
 
 
 if __name__ == "__main__":
     logger = logging.getLogger(__name__)
     logging.basicConfig(
-        level=logging.INFO,
+        level=logging.WARNING,
         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
         datefmt="%Y-%m-%d %H:%M:%S",
     )
