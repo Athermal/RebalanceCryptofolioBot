@@ -385,25 +385,46 @@ async def get_token_or_info(
     symbol: str = None,
     field: str = None,
     current_session: AsyncSession = None,
-) -> Optional[Union[Token, Any]]:
-    if not (token_id or symbol):
+    symbols: list[str] = None,
+) -> Optional[Union[Token, Any, list[Token]]]:
+    """Получение токена или его поля по ID или символу.
+    
+    Args:
+        token_id: ID токена
+        symbol: Символ токена
+        field: Поле токена для получения
+        current_session: Текущая сессия
+        symbols: Список символов для пакетной загрузки
+    
+    Returns:
+        Token, поле токена или список токенов
+    """
+    if not (token_id or symbol or symbols):
         return None
+        
     if field:
         query = select(getattr(Token, field))
     else:
         query = select(Token).options(
             selectinload(Token.sector), selectinload(Token.position)
         )
-    if token_id:
+        
+    if symbols:
+        query = query.where(Token.symbol.in_(symbols))
+    elif token_id:
         query = query.where(Token.id == token_id)
     elif symbol:
         query = query.where(Token.symbol == symbol)
+        
     if current_session:
         result = await current_session.execute(query)
     else:
         async with async_session() as session:
             result = await session.execute(query)
-    return result.scalar_one_or_none()
+    if symbols:
+        return result.scalars().all()
+    else:
+        return result.scalar_one_or_none()
 
 
 async def delete_token(token_id: int = None, symbol: str = None, token: Token = None) -> None:
@@ -548,20 +569,17 @@ async def get_all_positions() -> Optional[list[Position]]:
 
 async def get_all_usd_info() -> Optional[Decimal]:
     async with async_session() as session:
-        query = select(Direction.balance_usd).where(Direction.name == 'Ликвидность')
+        # Объединим все запросы в один
+        query = select(
+            select(Direction.balance_usd).where(Direction.name == 'Ликвидность').scalar_subquery(),
+            select(func.sum(Position.invested_usd)).scalar_subquery(),
+            select(func.sum(Token.balance_usd)).scalar_subquery()
+        )
         result = await session.execute(query)
-        usd_in_liquidity = result.scalar_one_or_none()
-
-        query = select(func.sum(Position.invested_usd))
-        result = await session.execute(query)
-        usd_in_positions = result.scalar_one_or_none()
-
-        query = select(func.sum(Token.balance_usd))
-        result = await session.execute(query)
-        usd_in_tokens = result.scalar_one_or_none()
-
+        usd_in_liquidity, usd_in_positions, usd_in_tokens = result.one_or_none()
+        
         all_usd_sum = ((usd_in_positions or Decimal(0)) + (usd_in_tokens or Decimal(0))
-                       + (usd_in_liquidity or Decimal(0)))
+                      + (usd_in_liquidity or Decimal(0)))
         return all_usd_sum or Decimal(0.00)
 
 
@@ -596,3 +614,31 @@ async def get_position_info(position_id: int = None, name: str = None,
             query = query.where(Position.id == position_id)
         position = await session.execute(query)
         return position.scalar_one_or_none()
+
+
+async def update_tokens_prices(prices: dict[str, Decimal]) -> None:
+    """Обновление цен токенов в БД и пересчет суммы позиции.
+    
+    Args:
+        prices: Словарь с ценами токенов {symbol: price}
+    """
+    if not prices:
+        return
+        
+    async with async_session() as session:
+        async with session.begin():
+            # Получаем все токены за один запрос
+            symbols = list(prices.keys())
+            query = (select(Token)
+                    .options(selectinload(Token.position))
+                    .where(Token.symbol.in_(symbols)))
+            result = await session.execute(query)
+            tokens = result.scalars().all()
+            
+            # Обновляем цены токенов
+            for token in tokens:
+                price = prices.get(token.symbol)
+                if price:
+                    token.current_coinprice_usd = price
+                    if token.position:
+                        token.position.total_usd = token.position.amount * price

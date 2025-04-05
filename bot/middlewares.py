@@ -4,8 +4,7 @@ from typing import Callable, Dict, Any, Awaitable
 from aiogram import BaseMiddleware, Dispatcher
 from aiogram.types import TelegramObject
 
-# Загружаем переменные окружения один раз при импорте модуля
-ADMIN_ID = int(os.getenv("ADMIN_ID", 0))
+ADMIN_ID = int(os.getenv("ADMIN_ID"))
 
 
 class CheckAdminMiddleware(BaseMiddleware):
