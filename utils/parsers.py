@@ -9,8 +9,10 @@ import ssl
 from dotenv import load_dotenv
 from decimal import Decimal
 
-from database.requests import get_all_positions, update_tokens_prices
+from database.requests import get_all_positions, update_tokens_prices, get_token_or_info
 from utils.common import symbols_list
+import bot.keyboards as kb
+from utils.helpers import format_number
 
 load_dotenv()
 ADMIN_ID = int(os.getenv("ADMIN_ID"))
@@ -30,6 +32,7 @@ class BybitTickersParser:
         self.session: Optional[aiohttp.ClientSession] = None
         self.tasks: list[asyncio.Task] = []
         self.sleep_task: Optional[asyncio.Task] = None
+        self.notified_tokens: set[str] = set()  
 
     async def init_tokens(self) -> None:
         """Инициализация токенов в уже созданных позициях"""
@@ -73,8 +76,7 @@ class BybitTickersParser:
                                     await self.bot.send_message(
                                         chat_id=ADMIN_ID,
                                         text=(f"❗️ Токен <b>{symbol}</b> отсутствует на Bybit, "
-                                              f"уведомлений по его цене <b>не будет</b>."),
-                                        parse_mode="HTML",
+                                              f"уведомлений по его цене <b>не будет</b>.")
                                     )
             except Exception as e:
                 logger.error(f"Ошибка при парсинге {symbol}: {e}")
@@ -107,17 +109,33 @@ class BybitTickersParser:
                     if prices:
                         await update_tokens_prices(prices)
                         # Проверяем, достигла ли цена токена цены фиксации тела инвестиций
-                        for symbol, price in prices.items():
-                            token = await get_token_or_info(symbol=symbol)
-                            if token and token.position and token.position.bodyfix_price_usd:
-                                if price >= token.position.bodyfix_price_usd:
-                                    if self.bot:
-                                        await self.bot.send_message(
-                                            chat_id=ADMIN_ID,
-                                            text=(f"🎯 Цена токена <b>{symbol}</b> достигла цены фиксации тела: "
-                                                  f"<b>{price}$</b>"),
-                                            parse_mode="HTML",
-                                        )
+                        symbols = list(prices.keys())
+                        tokens = await get_token_or_info(symbols=symbols)
+                        # Фильтруем список для отправки сообщений только по нужным токенам
+                        tokens_to_notify = [
+                            (token, prices.get(token.symbol))
+                            for token in tokens
+                            if (token.position and 
+                                prices.get(token.symbol, 0) >= token.position.bodyfix_price_usd and
+                                token.symbol not in self.notified_tokens)  
+                        ]
+                        # Отправляем уведомления только для отфильтрованных токенов
+                        for token, price in tokens_to_notify:
+                            if self.bot:
+                                await self.bot.send_message(
+                                    chat_id=ADMIN_ID,
+                                    text=(
+                                        f"🎯 Цена токена <b>{token.symbol}</b> "
+                                        f"достигла цены фиксации тела: "
+                                        f"<b>{format_number(price)}$</b>\n"
+                                    ),
+                                    reply_markup=await kb.to_position_button(
+                                        token.position.id
+                                    ),
+                                )
+                                # Добавляем токен в множество уведомленных
+                                self.notified_tokens.add(token.symbol)
+                                logger.info(f"Отправлено уведомление по токену {token.symbol}")
                     self.tasks = []
                 elif not symbols_list:
                     logger.warning("Список символов пуст.")

@@ -215,3 +215,10 @@ async def token_delete_confirm(token_id: int) -> InlineKeyboardMarkup:
                                       callback_data=f'token_delete_confirm_{token_id}'))
     keyboard.add(InlineKeyboardButton(text='❌ Отмена', callback_data=f'token_button_{token_id}'))
     return keyboard.as_markup()
+
+async def to_position_button(position_id: int) -> InlineKeyboardMarkup:
+    """Создает клавиатуру с одной кнопкой для перехода к позиции"""
+    keyboard = InlineKeyboardBuilder()
+    keyboard.row(InlineKeyboardButton(text='📊 Открыть позицию', 
+                                     callback_data=f'position_button_{position_id}'))
+    return keyboard.as_markup()

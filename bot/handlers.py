@@ -736,15 +736,18 @@ async def token_button(callback: CallbackQuery):
     position_id = int(callback.data.split('_')[2])
     position = await rq.get_position_info(position_id=position_id)
     if position:
+        current_price = position.token.current_coinprice_usd or 0
+        bodyfix_alert = "❗️" if current_price >= position.bodyfix_price_usd else ""
+        
         text = (
             f'<b>📊 Позиция по токену "{position.name}"</b>\n\n'
-            f'💰 <b>Общая сумма инвестиций:</b> {ut.format_number(position.invested_usd)}$\n\n'
-            f'<b>Количество токенов:</b> {ut.format_number(position.amount)}\n\n'
-            f'<b>Текущая цена токена:</b> '
-            f'{ut.format_number(position.token.current_coinprice_usd or 0)}$\n\n'
-            f'<b>Цена входа:</b> {ut.format_number(position.entry_price)}$\n'
-            f'<b>Цена фиксации тела (х2):</b> {ut.format_number(position.bodyfix_price_usd)}$\n\n'
-            f'📈 <b>Текущая стоимость позиции:</b> {ut.format_number(position.total_usd)}$'
+            f"💰 <b>Общая сумма инвестиций:</b> {ut.format_number(position.invested_usd)}$\n\n"
+            f"<b>Количество токенов:</b> {ut.format_number(position.amount)}\n\n"
+            f"<b>Цена входа:</b> {ut.format_number(position.entry_price)}$\n"
+            f"<b>Цена фиксации тела (х2):</b> {ut.format_number(position.bodyfix_price_usd)}$ "
+            f"{bodyfix_alert}\n"
+            f"<b>Текущая цена токена:</b> {ut.format_number(current_price)}$\n\n"
+            f"📈 <b>Текущая стоимость позиции:</b> {ut.format_number(position.total_usd)}$"
         )
         await callback.message.edit_text(text, reply_markup=await kb.in_position(position_id))
 
