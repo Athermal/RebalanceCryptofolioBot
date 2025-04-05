@@ -18,12 +18,12 @@ async def main():
     dp = Dispatcher()
     CheckAdminMiddleware(dp)
     dp.include_router(router)
-    parser = BybitTickersParser(bot=bot)
-    parser_task = asyncio.create_task(parser.run())
+    bybit_parser = BybitTickersParser(bot=bot)
+    parser_task = asyncio.create_task(bybit_parser.run())
     try:
         await dp.start_polling(bot)
     finally:
-        await parser.stop() 
+        await bybit_parser.stop() 
         await parser_task
 
 

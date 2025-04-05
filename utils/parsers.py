@@ -10,7 +10,7 @@ from dotenv import load_dotenv
 from decimal import Decimal
 
 from database.requests import get_all_positions, update_tokens_prices, get_token_or_info
-from utils.common import symbols_list
+from utils.common import symbols_list, notified_tokens
 import bot.keyboards as kb
 from utils.helpers import format_number
 
@@ -32,7 +32,6 @@ class BybitTickersParser:
         self.session: Optional[aiohttp.ClientSession] = None
         self.tasks: list[asyncio.Task] = []
         self.sleep_task: Optional[asyncio.Task] = None
-        self.notified_tokens: set[str] = set()  
 
     async def init_tokens(self) -> None:
         """Инициализация токенов в уже созданных позициях"""
@@ -117,7 +116,7 @@ class BybitTickersParser:
                             for token in tokens
                             if (token.position and 
                                 prices.get(token.symbol, 0) >= token.position.bodyfix_price_usd and
-                                token.symbol not in self.notified_tokens)  
+                                token.symbol not in notified_tokens)  
                         ]
                         # Отправляем уведомления только для отфильтрованных токенов
                         for token, price in tokens_to_notify:
@@ -126,15 +125,14 @@ class BybitTickersParser:
                                     chat_id=ADMIN_ID,
                                     text=(
                                         f"🎯 Цена токена <b>{token.symbol}</b> "
-                                        f"достигла цены фиксации тела: "
-                                        f"<b>{format_number(price)}$</b>\n"
+                                        f"достигла <b>цены фиксации тела!</b>"
                                     ),
                                     reply_markup=await kb.to_position_button(
                                         token.position.id
                                     ),
                                 )
                                 # Добавляем токен в множество уведомленных
-                                self.notified_tokens.add(token.symbol)
+                                notified_tokens.add(token.symbol)
                                 logger.info(f"Отправлено уведомление по токену {token.symbol}")
                     self.tasks = []
                 elif not symbols_list:

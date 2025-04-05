@@ -63,7 +63,7 @@ class Token(Base):
         Numeric(20, 2), nullable=True, default=0.0
     )
     current_coinprice_usd: Mapped[Decimal] = mapped_column(
-        Numeric(60,30), nullable=True
+        Numeric(45, 15), nullable=True
     )
 
     sector: Mapped['Sector'] = relationship('Sector', back_populates='tokens')
@@ -83,10 +83,10 @@ class Position(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)
     token_id: Mapped[int] = mapped_column(ForeignKey('tokens.id'), unique=True, nullable=False)
-    amount: Mapped[Decimal] = mapped_column(Numeric(60, 30), nullable=False)
-    entry_price: Mapped[Decimal] = mapped_column(Numeric(60, 30), nullable=False)
+    amount: Mapped[Decimal] = mapped_column(Numeric(45, 15), nullable=False)
+    entry_price: Mapped[Decimal] = mapped_column(Numeric(45, 15), nullable=False)
     invested_usd: Mapped[Decimal] = mapped_column(Numeric(20, 2), nullable=False)
-    bodyfix_price_usd: Mapped[Decimal] = mapped_column(Numeric(60, 30), nullable=False)
+    bodyfix_price_usd: Mapped[Decimal] = mapped_column(Numeric(45, 15), nullable=False)
     total_usd: Mapped[Decimal] = mapped_column(Numeric(20, 2), nullable=True, default=0.0)
 
     token: Mapped['Token'] = relationship('Token', back_populates='position')
@@ -97,8 +97,8 @@ class Order(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     token_id: Mapped[int] = mapped_column(ForeignKey('tokens.id'), nullable=False)
-    amount: Mapped[Decimal] = mapped_column(Numeric(60, 30), nullable=False)
-    entry_price: Mapped[Decimal] = mapped_column(Numeric(60, 30), nullable=False)
+    amount: Mapped[Decimal] = mapped_column(Numeric(45, 15), nullable=False)
+    entry_price: Mapped[Decimal] = mapped_column(Numeric(45, 15), nullable=False)
     type: Mapped[str] = mapped_column(String(4), default='Buy')
     added_at: Mapped[str] = mapped_column(TIMESTAMP, default=func.current_timestamp())
 

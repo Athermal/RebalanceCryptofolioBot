@@ -8,7 +8,7 @@ from sqlalchemy import select, func, desc
 from database.models import Deposit, Direction, Sector, Token, Position, Order
 from database.connection import async_session
 from utils.helpers import round_to_2
-from utils.common import symbols_list
+from utils.common import symbols_list, notified_tokens
 
 async def add_deposit(amount_usd: Decimal) -> None:
     async with async_session() as session:
@@ -506,6 +506,8 @@ async def buy_order(token_id: int, amount: Decimal, entry_price: Decimal) -> Non
                 position.invested_usd += invested_usd
                 position.entry_price = position.invested_usd / position.amount
                 position.bodyfix_price_usd = position.entry_price * Decimal(2)
+                if token.symbol in notified_tokens:
+                    notified_tokens.remove(token.symbol)
             else:
                 await add_position(token_id=token_id, amount=amount, entry_price=entry_price)
 
