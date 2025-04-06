@@ -127,6 +127,7 @@ class BybitTickersParser:
                         for token in tokens:
                             if not token.position:
                                 continue
+                                
                             symbol = token.symbol
                             price = prices.get(symbol, 0)
                             entry_price = token.position.entry_price
@@ -135,11 +136,22 @@ class BybitTickersParser:
                             drawdown_percent = ((entry_price - price) / entry_price) * 100
                             if drawdown_percent < DRAWDOWN_PERCENTAGE:
                                 continue
-                            last_price = drawdown_last_prices.get(symbol)
-                            if last_price is not None and price >= last_price:
+                            
+                            # Получаем последнюю цену, по которой было отправлено уведомление
+                            last_notified_price = drawdown_last_prices.get(symbol)
+                            
+                            # Первое уведомление о просадке (ранее не отправлялось)
+                            if last_notified_price is None:
+                                drawdown_tokens.append((token, price))
                                 continue
-                            drawdown_tokens.append((token, price))
-
+                                
+                            # Рассчитываем просадку от последней цены уведомления
+                            additional_drawdown = ((last_notified_price - price) / last_notified_price) * 100
+                            
+                            # Отправляем повторное уведомление только при значительной дополнительной просадке
+                            if additional_drawdown >= DRAWDOWN_PERCENTAGE:
+                                drawdown_tokens.append((token, price))
+                                
                         # Отправляем уведомления о фиксации тела
                         for token, price in bodyfix_tokens:
                             if self.bot:
@@ -166,7 +178,7 @@ class BybitTickersParser:
                                     text=(
                                         f"📉 <b>Просадка по {token.symbol}!</b>\n\n"
                                         f"Текущая цена: <b>${price}</b>\n"
-                                        f"Просадка: <b>{drawdown_percent:.2f}%</b>"
+                                        f"Просадка: <b><i>-{drawdown_percent:.2f}%</i></b>"
                                     ),
                                     reply_markup=await kb.to_position_button(
                                         token.position.id
