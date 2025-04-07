@@ -176,7 +176,7 @@ class BybitTickersParser:
                                 await self.bot.send_message(
                                     chat_id=ADMIN_ID,
                                     text=(
-                                        f"📉 <b>Просадка по {token.symbol}!</b>\n\n"
+                                        f"📉 <b>Просадка по {token.symbol} от последнего уведомления!</b>\n\n"
                                         f"Текущая цена: <b>${price}</b>\n"
                                         f"Просадка: <b><i>-{drawdown_percent:.2f}%</i></b>"
                                     ),
